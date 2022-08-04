@@ -1,24 +1,33 @@
 function stop = plot_fc(results,state)
-persistent hs nbest besthist nsupptrace
+persistent hs ssimbest fcbest besthist fctrace
 stop = false;
 switch state
     case 'initial'
         hs = figure;
         besthist = [];
-        nbest = 0;
-        nsupptrace = [];
+        %fcbest = 0;
+        ssimbest = 0;
+        %fctrace = [];
     case 'iteration'
         figure(hs)
-        nsupp = results.UserDataTrace{end};   % get nsupp from UserDataTrace property.
-        nsupptrace(end+1) = nsupp; % accumulate nsupp values in a vector.
+
+        fc = results.UserDataTrace{end}{4};   % get nsupp from UserDataTrace property.
+
+        ssim = results.UserDataTrace{end}{3};
+  
+        %fctrace(:, end+1) = fc; % accumulate nsupp values in a vector.
         if (results.ObjectiveTrace(end) == min(results.ObjectiveTrace)) || (length(results.ObjectiveTrace) == 1) % current is best
-            nbest = nsupp;
+            fcbest = fc;
+            ssimbest = ssim;
+            imagesc(fcbest);
+     
+            xlabel 'ROI'
+            ylabel 'ROI'
+            title 'Simulated corrleation'
+            drawnow
         end
-        besthist = [besthist,nbest];
-        plot(1:length(nsupptrace),nsupptrace,'b',1:length(besthist),besthist,'r--')
-        xlabel 'Iteration number'
-        ylabel 'Number of support vectors'
-        title 'Number of support vectors at each iteration'
-        legend('Current iteration','Best objective','Location','best')
-        drawnow
+  
+        besthist = [besthist,fcbest];
+        %plot(1:length(fctrace),fctrace,'b',1:length(besthist),besthist,'r--')
+        
 end

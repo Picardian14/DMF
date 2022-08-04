@@ -1,11 +1,10 @@
 function filt_bold = filter_bold(bold,flp,fhp,tr)
 % filters the bold signal iin TXN matrix
 % k is the order of the filter
-
 [T,N] = size(bold);
 fnq=1/(2*tr);                 % Nyquist frequency
 Wn=[flp/fnq fhp/fnq];         % butterworth bandpass non-dimensional frequency
-k=6;                          % 2nd order butterworth filter
+k=2;                          % 2nd order butterworth filter
 [bfilt,afilt]=butter(k,Wn);   % construct the filter
 % filtering and plotting
 filt_bold = zeros(T,N);

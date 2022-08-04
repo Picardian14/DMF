@@ -1,4 +1,4 @@
-function [opt_fc_error,opt_fcd_ks,opt_pars,results] = fit_fc_fcd_dmf_only_slope(T,emp_fc,emp_fcd,G,slope, nm,dmf_pars,opts)
+function [opt_fc_error,opt_fcd_ks,opt_pars,results,sim_fc_opt  ] = fit_fc_fcd_dmf_only_slope(T,emp_fc,emp_fcd,G,slope, nm,dmf_pars,opts)
 %
 % Function to find optimal DMF parameters to fit either the FC or the FCD
 % of bold signals.
@@ -42,13 +42,31 @@ if isempty(emp_fcd) % only optimizes FC
     opt_fc_error.results = results.MinEstimatedObjective;
     opt_fcd_ks = [];
     opt_pars =results.XAtMinEstimatedObjective;
+    %{
+    dmf_pars.G = results.XAtMinEstimatedObjective;
+    [rates,bold] = DMF(dmf_pars, nsteps,'both'); % runs simulation
+    bold = bold(:,dmf_pars.burnout:end); % remove initial transient
+    bold(isnan(bold))=0;
+    bold(isinf(bold(:)))=max(bold(~isinf(bold(:))));
+    if isempty(bold)
+        fc_error = nan;
+        return
+    end
     
+    % Filtering and computing FC
+    filt_bold = filter_bold(bold',dmf_pars.flp,dmf_pars.fhi,dmf_pars.TR);
+    sim_fc_opt = corrcoef(filt_bold);
+    %}
 else % OPTIMIZES FCD and returns FC GOF
     results = bayesopt(@aux_dmf_fit_fcd,opt_vars,opts{:});
     opt_fcd_ks = results.MinEstimatedObjective;
     opt_pars =results.XAtMinEstimatedObjective;
     [~,min_id] = min(results.EstimatedObjectiveMinimumTrace);
     opt_fc_error = results.UserDataTrace{min_id};
+
+
+
+
 end
 
     % FITS FC
@@ -102,7 +120,8 @@ end
         axis equal ;
         axis tight;
         fc_error= mean((sim_fc(isubfc)-emp_fc(isubfc)).^2); % MSE FC
-        outdata = {reg_fr,reg_ent};
+        %fc_error = 1-ssim(emp_fc,sim_fc);
+        outdata = {reg_fr,reg_ent, fc_error, sim_fc};
         
     end
 

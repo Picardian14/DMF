@@ -18,8 +18,8 @@ C = SC/max(max(SC))*0.2;
 % dmf parameters
 [ params ] = DefaultParams('C',C); % creates default parameters for the simulation
 params.burnout = 10; % seconds to remove after initial transient of simulation
-params.flp = 0.01; % low cut-off of the bandpass filter 0.01 for aal wake
-params.fhi = 0.1; % high cut-off of the bandpass filter 0.1
+params.flp = 0.04; % low cut-off of the bandpass filter 0.01 for aal wake
+params.fhi = 0.07; % high cut-off of the bandpass filter 0.1
 params.wsize = 30; % size of the FCD windows
 params.overlap = 28; % overlap of the FCD windows
 % IT IS TR=2 FOR ENZOS SLEEP DATA
@@ -46,25 +46,29 @@ indexsub=1:params.NSUB;
 for nsub=indexsub
     nsub;
     Wdata(:,:,nsub)=TS_W{1,nsub}(:,1:params.TMAX) ; % TS_W tiene registros de distinta longitud
-    Wdata(:,:,nsub) = filter_bold(Wdata(:, :,nsub), params.flp, params.fhi, params.TR);
+    WdataF(:,:,nsub) = permute(filter_bold(Wdata(:, :,nsub)', params.flp, params.fhi, params.TR), [2 1 3]);
     WFCdata(nsub,:,:)=corrcoef(squeeze(Wdata(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+    WFCdataF(nsub,:,:)=corrcoef(squeeze(WdataF(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+
 end
 
 for nsub=indexsub
     nsub;
     N3data(:,:,nsub)=TS_N3{1,nsub}(:,1:params.TMAX) ; % TS_W tiene registros de distinta longitud
-    N3data(:,:,nsub) = filter_bold(N3data(:, :,nsub), params.flp, params.fhi, params.TR);
+    N3dataF(:,:,nsub) = permute(filter_bold(N3data(:, :,nsub)', params.flp, params.fhi, params.TR), [2 1 3]);
     N3FCdata(nsub,:,:)=corrcoef(squeeze(N3data(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+    NFCdataF(nsub,:,:)=corrcoef(squeeze(N3dataF(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
 end
 WFCdata = permute(WFCdata, [2,3,1]);
 N3FCdata = permute(N3FCdata, [2,3,1]);
-
+WFCdata = permute(WFCdataF, [2,3,1]);
+N3FCdataF = permute(NFCdataF, [2,3,1]);
 
 
 %fcd = compute_fcd(mean(N3data, 3), params.wsize, params.overlap, Isubdiag);
 %nwins = size(fcd,1);
 %ave_fc = %mean(N3data,3);
-ave_fc = mean(N3FCdata,3);
+ave_fc = mean(N3FCdataF,3);
 
 %% Running optimizer
 % Bayes optimization options
@@ -74,7 +78,7 @@ ave_fc = mean(N3FCdata,3);
 opt_time = 3600*7*24; % a week
 checkpoint_folder = 'checkpoints/';
 %experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
-experiment_name = 'N3_FC_filt-order6';
+experiment_name = 'N3_FC_withPlot';
 checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(params.N),'_v1.mat'];
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -83,7 +87,8 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'ParallelMethod','clipped-model-prediction',...
         'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time,...
         'OutputFcn',@saveToFile,...
-        'SaveFileName',checkoint_file};
+        'SaveFileName',checkoint_file,...
+        'PlotFcn', {@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
 
 
 % Optimizable parameters
@@ -96,7 +101,7 @@ nm_bias = 0;
 T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
 
 % Optimizing heterogenity parameters
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope,nm_scale,params,bo_opts); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out, fc_sim_opt] = fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope,nm_scale,params,bo_opts); % Optimizes FCD
 
 %%
 opt_res = load([checkoint_file]);
