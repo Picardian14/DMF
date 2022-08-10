@@ -1,0 +1,31 @@
+Fitteo FC W:
+    G
+    2.43
+
+Fitteo FC N3:
+    G.       nm
+    2.34.    -0.46428 , 0.41
+
+
+
+
+
+Tengo entendido que una vez que halle el G, lo unico que hago es correr el DMF con ese G, y eso deberia darme algo similar al dato empirico
+Pero 
+1. Como puede ser que solo un parametro pueda incluir todos los estados de consciencia, W, N1-N3, DoC
+2. Me da un BOLD de 90x50, porque tan corta la simulacion? con 100000 nb steps. Esta bien, con 1000000 da 500.
+BUENO TIENE SENTIDO PERO QUE SON, SEGUNDOS?
+3. El FCD tambien me da cualquier cosa. Dice que deberia ser de ROIxROIxtime pero da algo tipo 4005x30. Pero da asi porque pide que sea de ese tamanio
+
+
+
+Fitteo FCD W:
+    G
+    2.57
+
+Fittear FCD de N3 me esta dando lo mismo que W
+
+Fitteo FCD N3:
+    G
+    2.58
+
