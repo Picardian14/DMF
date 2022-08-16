@@ -1,5 +1,5 @@
 function stop = plot_fc(results,state)
-persistent hs ssimbest fcbest besthist fctrace
+persistent hs ssimbest fcbest besthist fctrace i
 stop = false;
 switch state
     case 'initial'
@@ -7,7 +7,8 @@ switch state
         besthist = [];
         %fcbest = 0;
         ssimbest = 0;
-        %fctrace = [];
+        fctrace = [];
+        i=1;
     case 'iteration'
         figure(hs)
 
@@ -20,13 +21,17 @@ switch state
             fcbest = fc;
             ssimbest = ssim;
             imagesc(fcbest);
-     
+            fctrace(end+1)=fc;
             xlabel 'ROI'
             ylabel 'ROI'
             title 'Simulated corrleation'
             drawnow
+            disp(hs);
+          
+            
         end
-  
+        
+        
         besthist = [besthist,fcbest];
         %plot(1:length(fctrace),fctrace,'b',1:length(besthist),besthist,'r--')
         

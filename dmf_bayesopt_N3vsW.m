@@ -78,7 +78,7 @@ ave_fc = mean(N3FCdataF,3);
 opt_time = 3600*7*24; % a week
 checkpoint_folder = 'checkpoints/';
 %experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
-experiment_name = 'N3_FC_withPlot';
+experiment_name = 'N3_FC_G_optimization_s';
 checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(params.N),'_v1.mat'];
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
