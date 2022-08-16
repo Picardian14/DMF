@@ -17,7 +17,7 @@ switch state
         ssim = results.UserDataTrace{end}{3};
   
         %fctrace(:, end+1) = fc; % accumulate nsupp values in a vector.
-        if (results.ObjectiveTrace(end) == min(results.ObjectiveTrace)) || (length(results.ObjectiveTrace) == 1) % current is best
+        if (results.ObjectiveTrace(end) < min(results.ObjectiveTrace)) || (length(results.ObjectiveTrace) == 1) % current is best
             fcbest = fc;
             ssimbest = ssim;
             imagesc(fcbest);

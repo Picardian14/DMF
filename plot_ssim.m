@@ -18,7 +18,7 @@ switch state
         plot(1:length(fctrace),fctrace,'b',1:length(besthist),besthist,'r--')
         xlabel 'Iteration number'
         ylabel 'Number of support vectors'
-        title 'Number of support vectors at each iteration'
+        title 'SSIM at iteratioms'
         legend('Current iteration','Best objective','Location','best')
         drawnow
         

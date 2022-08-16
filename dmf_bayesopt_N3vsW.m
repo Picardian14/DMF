@@ -78,7 +78,7 @@ ave_fc = mean(N3FCdataF,3);
 opt_time = 3600*7*24; % a week
 checkpoint_folder = 'checkpoints/';
 %experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
-experiment_name = 'N3_FC_G_optimization_s';
+experiment_name = 'N3_FC_Galpha';
 checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(params.N),'_v1.mat'];
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -86,14 +86,14 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MaxObjectiveEvaluations',1e16,...
         'ParallelMethod','clipped-model-prediction',...
         'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time,...
-        'OutputFcn',@saveToFile,...
+        'OutputFcn',{@saveToFile, @plot_nextPoints},...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
-
-
+       
+       
 % Optimizable parameters
-G = [0.1 2.9]; 
-alpha_slope = 0.75; % fix alpha-> determines the local inhibitiory feedback. Can be optimized as well.
+G = [1 2.9]; 
+alpha_slope = [0.5 1]; % fix alpha-> determines the local inhibitiory feedback. Can be optimized as well.
 params.receptors = 0;
 nm_scale = 0; % Here only optimizing nm
 nm_bias = 0;
@@ -101,13 +101,13 @@ nm_bias = 0;
 T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
 
 % Optimizing heterogenity parameters
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out, fc_sim_opt] = fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope,nm_scale,params,bo_opts); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope,nm_scale, nm_bias,params,bo_opts); % Optimizes FCD
 
 %%
 opt_res = load([checkoint_file]);
 [best_pars,est_min_ks] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
 %%
-experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
+experiment_name = 'N3_FC_Galpha'; % Filtering with G=[]0 2.5
 checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(params.N),'_v1.mat'];
 opt_res = load([checkoint_file]);
 [best_pars,est_min_ks] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
@@ -141,14 +141,46 @@ T = params.TMAX; % seconds
 opt_res2 = load(checkoint_file2);
 [best_pars,est_min_ks] = bestPoint(opt_res2.BayesoptResults,'Criterion','min-mean')
 
-%% Optimizing G for FCD
-% TODO: CHECK HOW TO CALCULATE FCD. SHOULD BE NWINS X NWIXS X SUBJECTS
-Wdata = permute(Wdata, [2,3,1]);
-ave_rec = mean(Wdata, 3);
-fcd = compute_fcd(ave_rec, wsize, overlap, Isubdiag);
 
+
+%% Optimizing NM
+
+%% Running optimizer
+
+opt_time = 3600*7*24; % a week
+checkpoint_folder = 'checkpoints/';
+%experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
+experiment_name = 'N3_FC_nm_nobias';
+checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(90),'_v1.mat'];
+bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
+        'MinWorkerUtilization',4,...
+        'AcquisitionFunctionName','expected-improvement-plus',...
+        'MaxObjectiveEvaluations',1e16,...
+        'ParallelMethod','clipped-model-prediction',...
+        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time,...
+        'OutputFcn',@saveToFile,...
+        'SaveFileName',checkoint_file,...
+        'PlotFcn', {@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
+       
+       
+% Optimizable parameters
+G = 1.8148; 
+alpha_slope = 0.69; % fix alpha-> determines the local inhibitiory feedback. Can be optimized as well.
+params.receptors = av;
+nm_scale = [-2 2]; % Here only optimizing nm
+nm_bias = 0;
+
+T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
+
+% Optimizing heterogenity parameters
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope,nm_scale, nm_bias,params,bo_opts); % Optimizes FCD
 
 %%
+opt_res = load([checkoint_file]);
+[best_pars,est_min_ks] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
+
+%%
+
 
 load('DataSleepW_N3.mat')
 s1wake = TS_W{1}

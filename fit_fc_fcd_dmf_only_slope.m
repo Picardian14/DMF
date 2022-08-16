@@ -1,4 +1,4 @@
-function [opt_fc_error,opt_fcd_ks,opt_pars,results,sim_fc_opt  ] = fit_fc_fcd_dmf_only_slope(T,emp_fc,emp_fcd,G,slope, nm,dmf_pars,opts)
+function [opt_fc_error,opt_fcd_ks,opt_pars,results  ] = fit_fc_fcd_dmf_only_slope(T,emp_fc,emp_fcd,G,slope, nm, nm_bias,dmf_pars,opts)
 %
 % Function to find optimal DMF parameters to fit either the FC or the FCD
 % of bold signals.
@@ -36,27 +36,17 @@ if length(nm(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
     opt_vars = [opt_vars nmvals];
 end
 
+if length(nm_bias(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
+    nmbiasvals = optimizableVariable('nm_bias',[nm_bias(1) nm_bias(2)]);
+    opt_vars = [opt_vars nmbiasvals];
+end
+
 % BAYES OPTIMIZATION
 if isempty(emp_fcd) % only optimizes FC
     results = bayesopt(@aux_dmf_fit_fc,opt_vars,opts{:});
     opt_fc_error.results = results.MinEstimatedObjective;
     opt_fcd_ks = [];
     opt_pars =results.XAtMinEstimatedObjective;
-    %{
-    dmf_pars.G = results.XAtMinEstimatedObjective;
-    [rates,bold] = DMF(dmf_pars, nsteps,'both'); % runs simulation
-    bold = bold(:,dmf_pars.burnout:end); % remove initial transient
-    bold(isnan(bold))=0;
-    bold(isinf(bold(:)))=max(bold(~isinf(bold(:))));
-    if isempty(bold)
-        fc_error = nan;
-        return
-    end
-    
-    % Filtering and computing FC
-    filt_bold = filter_bold(bold',dmf_pars.flp,dmf_pars.fhi,dmf_pars.TR);
-    sim_fc_opt = corrcoef(filt_bold);
-    %}
 else % OPTIMIZES FCD and returns FC GOF
     results = bayesopt(@aux_dmf_fit_fcd,opt_vars,opts{:});
     opt_fcd_ks = results.MinEstimatedObjective;
@@ -86,6 +76,10 @@ end
             fic_nm = thispars.receptors.*g_alpha.nm; % Could add bias
             thispars.J = thispars.J + (thispars.J).*fic_nm; % modulates FIC
         end
+        if ismember('nm_bias',g_alpha.Properties.VariableNames)
+            fic_nm = thispars.receptors.*g_alpha.nm + g_alpha.nm_bias; % Could add bias
+            thispars.J = thispars.J + (thispars.J).*fic_nm; % modulates FIC
+        end
         
         % Simulating
         [rates,bold] = DMF(thispars, nsteps,'both'); % runs simulation
@@ -108,20 +102,13 @@ end
             gamma_pars = gamfit(rates(n,:));
             reg_ent(n) = gamma_ent_fun(gamma_pars);
         end
-        % Filtering and computing FC
-        filt_bold = filter_bold(bold',dmf_pars.flp,dmf_pars.fhi,dmf_pars.TR);
-        sim_fc = corrcoef(filt_bold);
+       
         % Computing FC error: Mean Squared differences between vectorized FCs
         
-        imagesc(sim_fc)
-        colormap(gca,'parula');
-        colorbar();
-        caxis([-1 1]);
-        axis equal ;
-        axis tight;
+      
         fc_error= mean((sim_fc(isubfc)-emp_fc(isubfc)).^2); % MSE FC
-        %fc_error = 1-ssim(emp_fc,sim_fc);
-        outdata = {reg_fr,reg_ent, fc_error, sim_fc};
+        ssim_error = 1-ssim(emp_fc,sim_fc);
+        outdata = {reg_fr,reg_ent, ssim_error, sim_fc};
         
     end
 

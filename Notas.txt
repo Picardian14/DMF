@@ -6,7 +6,10 @@ Fitteo FC N3:
     G.       nm
     2.34.    -0.46428 , 0.41
 
-
+SSIM.
+0.723
+MSE
+0.0515
 
 
 
@@ -28,4 +31,31 @@ Fittear FCD de N3 me esta dando lo mismo que W
 Fitteo FCD N3:
     G
     2.58
+    
+    
+    
+    
+ Habiendo filtrado y todo, calculando el SSIM y viendo la FC
+ Si optimizo al mismo tiempo alpha y G obtengo resultados muy distintos
+ 
+ Fitteo FC N3:
+ 	G.	alpha.
+ 	1.81	0.69
+ 	
+SSIM 
+0.7102 	
+MSE
+0.0475
+ est_min_ks.
+ 0.113
+ 
+Una vez fijado esto  probe con el feedback inhibitory. El 1 del bias era el maximo asi que algo raro paso ahi
+nm slope.	nm bias.
+-1.457		1
+SSIM
+0.80
+MSE
+0.0384
+est_min_ks 
+0.12
 

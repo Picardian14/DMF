@@ -61,10 +61,11 @@ params.Ii        = 177/615; % inhibitory threshold for nonlineariy
 params.g_i       = 615.;    % inhibitory conductance
 params.wgaine    = 0;       % neuromodulatory gain
 params.wgaini    = 0;       % neuromodulatory gain
-params.G         = 2.3625;       % Global Coupling Parameter
 
-params.nm = 0; % FIC scaling
-
+params.G         = 1.8148;       % Global Coupling Parameter
+params.alpha = 0.6981;
+params.nm = -1.457; % FIC scaling
+params.nm_bias = 1; % FIC scaling
 % Data parameters
 
 % Balloon-Windkessel parameters (from firing rates to BOLD signal)
