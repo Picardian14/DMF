@@ -108,7 +108,8 @@ end
       
         fc_error= mean((sim_fc(isubfc)-emp_fc(isubfc)).^2); % MSE FC
         ssim_error = 1-ssim(emp_fc,sim_fc);
-        outdata = {reg_fr,reg_ent, ssim_error, sim_fc};
+        corr_error = 1-corr2(emp_fc, sim_fc);
+        outdata = {reg_fr,reg_ent, ssim_error, sim_fc, corr_error};
         
     end
 

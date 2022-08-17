@@ -9,7 +9,7 @@ switch state
         fctrace = [];
     case 'iteration'
         figure(hs)
-        ssim = results.UserDataTrace{end}{3};
+        ssim = results.UserDataTrace{end}{5};
         fctrace(end+1) = ssim; % accumulate nsupp values in a vector.
         if (results.ObjectiveTrace(end) == min(results.ObjectiveTrace)) || (length(results.ObjectiveTrace) == 1) % current is best 
             ssimbest = ssim;

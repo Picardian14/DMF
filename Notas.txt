@@ -59,3 +59,54 @@ MSE
 est_min_ks 
 0.12
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FITTEO W
+
+
+     G        alpha 
+    ______    _______
+
+    1.5096    0.55659
+    
+
+ 
+est_min_ks =
+
+    0.0786
+    
+ MSE
+  0.1059
+  
+ SSIM
+  0.7705
+  
+  
+  
+   Si lo corro 300 mas en un rango acotado
+ 
+       G        alpha 
+    ______    _______
+
+    1.7156    0.41896
+
+MSE
+0.1392
+SSIM
+0.8413
+
+G = [1.2 1.8];
+alpha_slope = [0.4 0.65]; % fix alpha
+

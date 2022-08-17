@@ -28,7 +28,7 @@ params.batch_size = 50000; % batch for
 % circular buffer of simulation
 % params.seed = 10; % initial condition for the simulation. 
 % Heterogenity
-params.receptors = av;
+params.receptors = av/max(av);
 % Setting data constants
 params.N=90;
 params.NSUB=15;
@@ -61,15 +61,16 @@ for nsub=indexsub
 end
 WFCdata = permute(WFCdata, [2,3,1]);
 N3FCdata = permute(N3FCdata, [2,3,1]);
-WFCdata = permute(WFCdataF, [2,3,1]);
+WFCdataF = permute(WFCdataF, [2,3,1]);
 N3FCdataF = permute(NFCdataF, [2,3,1]);
 
 
 %fcd = compute_fcd(mean(N3data, 3), params.wsize, params.overlap, Isubdiag);
 %nwins = size(fcd,1);
 %ave_fc = %mean(N3data,3);
-ave_fc = mean(N3FCdataF,3);
 
+ave_fc = mean(N3FCdataF,3);
+%ave_fc = mean(WFCdataF,3);
 %% Running optimizer
 % Bayes optimization options
 % The optimizer runs for a very long time, but it saves in disk the output
@@ -78,7 +79,7 @@ ave_fc = mean(N3FCdataF,3);
 opt_time = 3600*7*24; % a week
 checkpoint_folder = 'checkpoints/';
 %experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
-experiment_name = 'N3_FC_Galpha';
+experiment_name = 'W_FC_Galpha';
 checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(params.N),'_v1.mat'];
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -86,7 +87,7 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MaxObjectiveEvaluations',1e16,...
         'ParallelMethod','clipped-model-prediction',...
         'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time,...
-        'OutputFcn',{@saveToFile, @plot_nextPoints},...
+        'OutputFcn',@saveToFile,...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
        
@@ -107,8 +108,8 @@ T = params.TMAX; % seconds to simulate, should be comparable to the empirical re
 opt_res = load([checkoint_file]);
 [best_pars,est_min_ks] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
 %%
-experiment_name = 'N3_FC_Galpha'; % Filtering with G=[]0 2.5
-checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(params.N),'_v1.mat'];
+experiment_name = 'W_FC_Galpha'; % Filtering with G=[]0 2.5
+checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(90),'_v1.mat'];
 opt_res = load([checkoint_file]);
 [best_pars,est_min_ks] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
 %% Loading optimization results from disk and resuming optimization
@@ -118,7 +119,7 @@ iniX = opt_res.BayesoptResults.XTrace;
 iniObj = opt_res.BayesoptResults.ObjectiveTrace;
 
 % Bayes optimization options
-checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(N),'_v2.mat'];
+checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
 bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
     'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -130,12 +131,12 @@ bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
         'SaveFileName',checkoint_file2};
     
 % Optimizable parameters
-G = [2.3 2.9];
-alpha_slope = 0.75; % fix alpha
+G = [1.2 1.8];
+alpha_slope = [0.4 0.65]; % fix alpha
 
-T = params.TMAX; % seconds
+T = 198; % seconds
 %[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] =  fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope,params,bo_opts2); % optimizes FC
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_fc_fcd_dmf_only_slope(T,ave_fc,fcd,G,alpha_slope,params,bo_opts2); % optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_fc_fcd_dmf_only_slope(T,ave_fc,[],G,alpha_slope, nm_scale, nm_bias,params,bo_opts2); % optimizes FCD
 
 %% Extracting Optimal Parameters
 opt_res2 = load(checkoint_file2);
@@ -150,7 +151,7 @@ opt_res2 = load(checkoint_file2);
 opt_time = 3600*7*24; % a week
 checkpoint_folder = 'checkpoints/';
 %experiment_name = 'N3_FC_filtered'; % Filtering with G=[]0 2.5
-experiment_name = 'N3_FC_nm_nobias';
+experiment_name = 'N3_MSE_nm_nobias_normalized';
 checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_checkpoint_dmf_bayesopt_N',num2str(90),'_v1.mat'];
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -160,16 +161,16 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time,...
         'OutputFcn',@saveToFile,...
         'SaveFileName',checkoint_file,...
-        'PlotFcn', {@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
+        'PlotFcn', {@plot_ssim, @plot_fc, @plotObjectiveModel,@plotMinObjective}};
        
        
 % Optimizable parameters
-G = 1.8148; 
+G = 1.81; 
 alpha_slope = 0.69; % fix alpha-> determines the local inhibitiory feedback. Can be optimized as well.
-params.receptors = av;
-nm_scale = [-2 2]; % Here only optimizing nm
-nm_bias = 0;
-
+params.receptors = av/max(av);
+nm_scale = [-3 3]; % Here only optimizing nm
+nm_bias = [-3 3];
+params.TMAX = 198;
 T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
 
 % Optimizing heterogenity parameters
