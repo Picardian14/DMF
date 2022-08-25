@@ -11,12 +11,9 @@ switch state
         i=1;
     case 'iteration'
         figure(hs)
+        fc = results.UserDataTrace{end}{3};   % get nsupp from UserDataTrace property.
+        ssim = results.UserDataTrace{end}{4}('ssim');
 
-        fc = results.UserDataTrace{end}{4};   % get nsupp from UserDataTrace property.
-
-        ssim = results.UserDataTrace{end}{3};
-  
-        %fctrace(:, end+1) = fc; % accumulate nsupp values in a vector.
         if (results.ObjectiveTrace(end) <= min(results.ObjectiveTrace)) || (length(results.ObjectiveTrace) == 1) % current is best
             fcbest = fc;
             ssimbest = ssim;
@@ -26,13 +23,16 @@ switch state
             ylabel 'ROI'
             title 'Simulated corrleation'
             drawnow
-            disp(hs);
-          
-            
+            disp(hs);                      
         end
-        
-        
         besthist = [besthist,fcbest];
-        %plot(1:length(fctrace),fctrace,'b',1:length(besthist),besthist,'r--')
-        
+    case 'done'
+        if length(fctrace)>10
+            fctrace=fctrace(end-10:end);
+        end
+        for i=1:length(fctrace)
+            h=figure('Visible', 'off');
+            imagesc(fcbest);
+            savefig(h, "Figuras/optFC"+i+".fig")
+        end
 end
