@@ -25,6 +25,7 @@ params.N=90;
 params.NSUB=15;
 params.TMAX=198;
 Isubdiag = find(tril(ones(params.N),-1));
+isubfc = Isubdiag;
 
 indexsub=1:params.NSUB;
 for nsub=indexsub
@@ -52,17 +53,22 @@ ave_fc = mean(N3FCdataF,3);
 %ave_fc = mean(WFCdataF,3);
 
 
+
+
+
+%%
+% MSE
+%
 opt_mse = load('data/checkpoints/N3_MSE_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat')
 best_pars_mse = bestPoint(opt_mse.BayesoptResults,'Criterion','min-mean')
 % Optimizable parameters
 G = best_pars_mse.G; 
-alpha_slope = best_pars_mse.alpha; 
+alpha = best_pars_mse.alpha; 
 % receptors already set
 nm = [-4 4]; % Here only optimizing nm
 nm_bias = [-4 4];
 T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
 % Optimizing heterogenity parameters
-
 
 checkpoint_folder = 'checkpoints/';
 experiment_name = 'N3_MSE_FIC';
@@ -72,9 +78,6 @@ opt_time_2 = 600; % 10 min
 %opt_time_1 = 120; % 2 min
 %opt_time_2 = 60; % 1 min
 
-%%
-% MSE
-%
 
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -86,14 +89,14 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'mse'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_mse] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'mse'); % Optimizes FCD
 opt_res = load([checkoint_file]);
 [best_pars_mse,est_min_ks_mse] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
 
 mkdir Figuras/N3_FC_FIC/ MSE/
 movefile Figuras/*plot.fig Figuras/N3_FC_FIC/MSE/
 close all;
-% Finetuning
+%% Finetuning
 iniX = opt_res.BayesoptResults.XTrace;
 iniObj = opt_res.BayesoptResults.ObjectiveTrace;
 checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
@@ -109,10 +112,9 @@ bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
         'SaveFileName',checkoint_file2};
 
 nm = [max(-4,best_pars_mse.nm-0.5) min(best_pars_mse.nm+0.5, 4)];
-nm = [ma-201,best_pars_mse.nm_bias-035) min(best_pars_mse.nm_bias+0.3, 2)];
+nm_bias = [max(-2,best_pars_mse.nm_bias-0.3) min(best_pars_mse.nm_bias+0.3, 2)];
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_with_metrics(T,ave_fc,[],G,alpha,nm, nm_bias,params,bo_opts2, 'mse'); % Optimizes FCD
-
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_mse] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts2, 'mse'); 
 
 mkdir Figuras/N3_FC_FIC/MSE/ Finetune/
 movefile Figuras/*plot.fig Figuras/N3_FC_FIC/MSE/Finetune
@@ -141,14 +143,14 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'OutputFcn',@saveToFile,...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'ssim'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'ssim'); % Optimizes FCD
 opt_res = load([checkoint_file]);
 [best_pars_ssim,est_min_ks_ssim] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
 
 mkdir Figuras/N3_FC_FIC/ SSIM/
 movefile Figuras/*_plot.fig Figuras/N3_FC_FIC/SSIM/
 close all;
-% Finetuning
+%% Finetuning
 iniX = opt_res.BayesoptResults.XTrace;
 iniObj = opt_res.BayesoptResults.ObjectiveTrace;
 checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
@@ -164,9 +166,9 @@ bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
         'SaveFileName',checkoint_file2};
 
 nm = [max(-4,best_pars_ssim.nm-0.5) min(best_pars_ssim.nm+0.5, 4)];
-nm_bias = [max(-2,best_pars_ssim.nm_bias-0.3) min(best_pars_ssim.nm_bias+0.3, 2)];
+nm_bias = [max(-4,best_pars_ssim.nm_bias-0.3) min(best_pars_ssim.nm_bias+0.3, 4)];
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_with_metrics(T,ave_fc,[],G,alpha,nm, nm_bias,params,bo_opts2, 'ssim'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts2, 'ssim'); % Optimizes FCD
 
 mkdir Figuras/N3_FC_FIC/SSIM/ Finetune/
 movefile Figuras/*_plot.fig Figuras/N3_FC_FIC/SSIM/Finetune
@@ -195,7 +197,7 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'OutputFcn',@saveToFile,...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_mse,@plot_corr,@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'corr'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_corr] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'corr'); % Optimizes FCD
 opt_res = load([checkoint_file]);
 [best_pars_corr,est_min_ks_corr] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
 mkdir Figuras/N3_FC_FIC/ CORR/
@@ -217,9 +219,9 @@ bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
         'SaveFileName',checkoint_file2};
 
 nm = [max(-4,best_pars_corr.nm-0.5) min(best_pars_corr.nm+0.5, 4)];
-nm_bias = [max(-2,best_pars_corr.nm_bias-0.3) min(best_pars_corr.nm_bias+0.3, 2)];
+nm_bias = [max(-4,best_pars_corr.nm_bias-0.3) min(best_pars_corr.nm_bias+0.3, 4)];
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out] = fit_with_metrics(T,ave_fc,[],G,alpha,nm, nm_bias,params,bo_opts2, 'corr'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_corr] = fit_with_metrics(T,ave_fc,[],G,alpha,nm, nm_bias,params,bo_opts2, 'corr'); % Optimizes FCD
 
 mkdir Figuras/N3_FC_FIC/CORR/ Finetune/
 movefile Figuras/*_plot.fig Figuras/N3_FC_FIC/CORR/Finetune
@@ -229,12 +231,15 @@ close all;
 %%
 params = DefaultParams();
 params.receptors = av/max(av);
+params.receptors(find(params.receptors==0))=mean(params.receptors);
 stren = sum(params.C);
 thispars = params;
 
-thispars.G = best_pars_mse.G;
-thispars.alpha = best_pars_mse.alpha;
+thispars.G = 0.9721;
+thispars.alpha = 0.2422;
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
+fic_nm = thispars.receptors.*best_pars_mse.nm + best_pars_mse.nm_bias; % Could add bias
+thispars.J = thispars.J + (thispars.J).*fic_nm; % modulates FIC
 
 % Run simulation for a given nb of steps (milliseconds)
 nb_steps = 500000;
@@ -248,32 +253,35 @@ for nsub=1:15
     simulations(:, :, nsub) = BOLDNM(:, 1:198);
     simulationsFC(:, :, nsub) = corrcoef(squeeze(simulations(:, :, nsub))');
 end
-save("Results/N3_MSE_FIC.mat", "simulationsFC", "best_pars_mse", "bayesopt_out")
+save("Results/N3_MSE_FIC.mat", "simulationsFC", "best_pars_mse", "bayesopt_out_mse")
 h = figure();
 imagesc(squeeze(mean(simulationsFC ,3)));
 savefig(h, "Figuras/N3_FC_FIC/MSE/MSE_sim.fig")
-
-thispars.G = best_pars_ssim.G;
-thispars.alpha = best_pars_ssim.alpha;
+%%
+thispars.G = 1.822;
+thispars.alpha = 0.692;
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
-
+optssim = load('data/checkpoints/N3_SSIM_FICfinetune_checkpoint_dmf_bayesopt_N90_v2.mat');
+best_pars_ssim = bestPoint(optssim.BayesoptResults, 'Criterion', 'min-mean');
+fic_nm = thispars.receptors.*best_pars_ssim.nm + best_pars_ssim.nm_bias; % Could add bias
+thispars.J = thispars.J + (thispars.J).*fic_nm; % modulates FIC
 % Run simulation for a given nb of steps (milliseconds)
 nb_steps = 500000;
 for nsub=1:15
     nsub
     BOLDNM = DMF(thispars, nb_steps);
-    BOLDNM = filter_bold(BOLDNM', params.flp, params.fhi, params.TR);
+    BOLDNM = filter_bold(BOLDNM', thispars.flp, thispars.fhi, thispars.TR);
     BOLDNM = BOLDNM';   
     trans = 5;
     BOLDNM = BOLDNM(:, 1+trans:end-trans);
     simulations(:, :, nsub) = BOLDNM(:, 1:198);
     simulationsFC(:, :, nsub) = corrcoef(squeeze(simulations(:, :, nsub))');
 end
-save("Results/N3_SSIM_FIC.mat", "simulationsFC", "best_pars_ssim", "bayesopt_out")
+save("Results/N3_SSIM_FIC.mat", "simulationsFC", "best_pars_ssim", "bayesopt_out_ssim")
 h = figure();
 imagesc(squeeze(mean(simulationsFC ,3)));
 savefig(h, "Figuras/N3_FC_FIC/SSIM/SSIM_sim.fig")
-
+%%
 thispars.G = best_pars_corr.G;
 thispars.alpha = best_pars_corr.alpha;
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
@@ -291,7 +299,7 @@ for nsub=1:15
     simulations(:, :, nsub) = BOLDNM(:, 1:198);
     simulationsFC(:, :, nsub) = corrcoef(squeeze(simulations(:, :, nsub))');
 end
-save("Results/N3_CORR_FIC.mat", "simulationsFC", "best_pars_corr", "bayesopt_out")
+save("Results/N3_CORR_FIC.mat", "simulationsFC", "best_pars_corr", "bayesopt_out_corr")
 h = figure();
 imagesc(squeeze(mean(simulationsFC ,3)));
 savefig(h, "Figuras/N3_FC_FIC/CORR/CORR_sim.fig")

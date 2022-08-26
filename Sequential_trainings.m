@@ -236,7 +236,7 @@ save("Results/N3_MSE_Galpha.mat", "simulationsFC5","simulationsFC20", "best_pars
 h = figure();
 imagesc(squeeze(mean(simulationsFC5 ,3)));
 savefig(h, "Figuras/N3_FC/MSE/MSE_sim2.fig")
-
+%% SSIM
 thispars.G = best_pars_ssim.G;
 thispars.alpha = best_pars_ssim.alpha;
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
@@ -257,11 +257,11 @@ for nsub=1:15
     simulations20(:, :, nsub) = BOLDNM20(:, 1:198);
     simulationsFC20(:, :, nsub) = corrcoef(squeeze(simulations20(:, :, nsub))');
 end
-save("Results/N3_SSIM_Galpha.mat", "simulationsFC5","simulationsFC20", "best_pars_ssim")
+%save("Results/N3_SSIM_Galpha.mat", "simulationsFC5","simulationsFC20", "best_pars_ssim")
 h = figure();
 imagesc(squeeze(mean(simulationsFC5 ,3)));
-savefig(h, "Figuras/N3_FC/SSIM/SSIM_sim2.fig")
-
+%savefig(h, "Figuras/N3_FC/SSIM/SSIM_sim2.fig")
+%% CORR
 thispars.G = best_pars_corr.G;
 thispars.alpha = best_pars_corr.alpha;
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it

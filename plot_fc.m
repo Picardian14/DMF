@@ -27,6 +27,9 @@ switch state
         end
         besthist = [besthist,fcbest];
     case 'done'
+        imagesc(fcbest);
+        savefig(h, "Figuras/optFC.fig");
+        save("Figuras/FCtrace.mat", "fctrace", "besthist");
         if length(fctrace)>10
             fctrace=fctrace(end-10:end);
         end

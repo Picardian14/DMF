@@ -34,8 +34,8 @@ end
 % DMF parameters
 
 params.burnout = 10; % seconds to remove after initial transient of simulation
-params.flp = 0.01; % low cut-off of the bandpass filter 0.01 for aal wake
-params.fhi = 0.1; % high cut-off of the bandpass filter 0.1
+params.flp = 0.04; % low cut-off of the bandpass filter 0.01 for aal wake
+params.fhi = 0.07; % high cut-off of the bandpass filter 0.1
 params.wsize = 30; % size of the FCD windows
 params.overlap = 28; % overlap of the FCD windows
 % IT IS TR=2 FOR ENZOS SLEEP DATA
@@ -71,7 +71,7 @@ params.nm_bias = 0; % FIC scaling
 % Balloon-Windkessel parameters (from firing rates to BOLD signal)
 params.TR  = 2;     % number of seconds to sample bold signal
 params.dtt = 0.001; % BW integration step, in seconds
-
+params.TMAX=198;
 % Parallel computation parameters
 params.batch_size = 5000;
 
