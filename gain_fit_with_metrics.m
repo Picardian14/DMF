@@ -37,7 +37,7 @@ if length(gain_exc(:))==2 % if 2x1, optimized within bounds, otherwise dont opti
 end
 
 if length(gain_inh(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
-    gain_inhsvals = optimizableVariable('gain_inh',[gain_inh(1) gain_inh(2)]);
+    gain_inhvals = optimizableVariable('gain_inh',[gain_inh(1) gain_inh(2)]);
     opt_vars = [opt_vars gain_inhvals];
 end
 
