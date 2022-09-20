@@ -49,35 +49,54 @@ N3FCdata = permute(N3FCdata, [2,3,1]);
 WFCdataF = permute(WFCdataF, [2,3,1]);
 N3FCdataF = permute(NFCdataF, [2,3,1]);
 
-ave_fc = mean(N3FCdataF,3);
-%ave_fc = mean(WFCdataF,3);
+%ave_fc = mean(N3FCdataF,3);
+ave_fc = mean(WFCdataF,3);
 
 
 opt_time_1 = 1200; % 20 min
 opt_time_2 = 600; % 10 min
-checkpoint_folder = 'checkpoints/';
 
-%%
+
+
+
+experiment_name = "W_Gaine_rep2";
+if ~exist(fullfile("Figuras",experiment_name))
+    mkdir(fullfile("Figuras",experiment_name))
+end
+if ~exist(fullfile("Results",experiment_name))
+    mkdir(fullfile("Results",experiment_name))
+end
+   
+if ~exist(fullfile("data/checkpoints",experiment_name))
+    mkdir(fullfile("data/checkpoints",experiment_name))
+end
+
+%
 % MSE
 %
-opt_mse = load('data/checkpoints/N3_MSE_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat')
+sub_experiment_name = "MSE";
+filename = experiment_name+"-"+sub_experiment_name;
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name))
+end
+if ~exist(fullfile("Results",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Results",experiment_name, sub_experiment_name))
+end
+
+opt_mse = load('data/checkpoints/W_MSE_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat')
+checkpoint_folder = fullfile("data/checkpoints",experiment_name);
+checkoint_file = [fullfile(checkpoint_folder,filename+"_v1.mat")];
 best_pars_mse = bestPoint(opt_mse.BayesoptResults,'Criterion','min-mean')
 % Optimizable parameters
 G = best_pars_mse.G; 
 alpha = best_pars_mse.alpha; 
 % receptors already set
-gain_slope = [-4 4]; % Here only optimizing nm
-gain_bias = 0;
+gain_exc = [-3 3]; % Here only optimizing nm
+gain_inh = 0;
 T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
 % Optimizing heterogenity parameters
 
 
-experiment_name = 'N3_MSE_Gain_exc';
-checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_v1.mat'];
-
-%opt_time_1 = 120; % 2 min
-%opt_time_2 = 60; % 1 min
-
 
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -89,71 +108,16 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_mse] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha_slope,params,bo_opts, 'mse'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_mse] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,gain_exc, gain_inh, params,bo_opts, 'mse'); % Optimizes FCD
 opt_res = load([checkoint_file]);
 [best_pars_mse,est_min_ks_mse] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
-
-mkdir Figuras/N3_FC_Gain_exc/ MSE/
-movefile Figuras/*plot.fig Figuras/N3_FC_Gain_exc/MSE/
-close all;
-%% Finetuning
-iniX = opt_res.BayesoptResults.XTrace;
-iniObj = opt_res.BayesoptResults.ObjectiveTrace;
-checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
-bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
-    'IsObjectiveDeterministic',false,'UseParallel',true,...
-        'MinWorkerUtilization',4,...
-        'AcquisitionFunctionName','expected-improvement-plus',...
-        'MaxObjectiveEvaluations',1e16,...
-        'ParallelMethod','clipped-model-prediction',...
-        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time_2   ,...
-        'OutputFcn',@saveToFile,...
-        'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective},...
-        'SaveFileName',checkoint_file2};
-
-nm = [max(-4,best_pars_mse.nm-0.5) min(best_pars_mse.nm+0.5, 4)];
-nm_bias = [max(-2,best_pars_mse.nm_bias-0.3) min(best_pars_mse.nm_bias+0.3, 2)];
-
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_mse] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts2, 'mse'); 
-
-mkdir Figuras/N3_FC_Gain_exc/MSE/ Finetune/
-movefile Figuras/*plot.fig Figuras/N3_FC_Gain_exc/MSE/Finetune
-close all;
-%%
-% SSIM
-%
-
-opt_ssim = load('data/checkpoints/N3_SSIM_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat')
-best_pars_ssim = bestPoint(opt_ssim.BayesoptResults,'Criterion','min-mean');
-% Optimizable parameters
-G = best_pars_ssim.G; 
-alpha_slope = best_pars_ssim.alpha; 
-
-gain_exc = [-2 2]; % Here only optimizing gain
-gain_inh = 0;
-
-experiment_name = 'N3_SSIM_Gain_exc';
-checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_v1.mat'];
-bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
-        'MinWorkerUtilization',4,...
-        'AcquisitionFunctionName','expected-improvement-plus',...
-        'MaxObjectiveEvaluations',1e16,...
-        'ParallelMethod','clipped-model-prediction',...
-        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time_1,...
-        'OutputFcn',@saveToFile,...
-        'SaveFileName',checkoint_file,...
-        'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha_slope,gain_exc, gain_inh,params,bo_opts, 'ssim'); % Optimizes FCD
-opt_res = load([checkoint_file]);
-[best_pars_ssim,est_min_ks_ssim] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
-
-mkdir Figuras/N3_FC_Gain_exc/ SSIM/
-movefile Figuras/*_plot.fig Figuras/N3_FC_Gain_exc/SSIM/
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name))
+movefile("Results/FCtrace.mat", fullfile("Results", experiment_name, sub_experiment_name, "FCtrace_base.mat"))
 close all;
 % Finetuning
 iniX = opt_res.BayesoptResults.XTrace;
 iniObj = opt_res.BayesoptResults.ObjectiveTrace;
-checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
+checkoint_file2 = [fullfile(checkpoint_folder,filename+"_v2.mat")];
 bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
     'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -165,29 +129,112 @@ bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
         'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective},...
         'SaveFileName',checkoint_file2};
 
-gain_exc = [max(-2,best_pars_ssim.gain_exc-0.5) min(best_pars_ssim.gain_exc+0.5, 2)];
-gain_inh = 0;%[max(-2,best_pars_ssim.gain_inh-0.5) min(best_pars_ssim.gain_inh+0.5, 2)];
+gain_exc = [max(-3,best_pars_mse.gain_exc-0.5) min(best_pars_mse.gain_exc+0.5, 3)];
+gain_inh = 0;%[max(-2,best_pars_mse.gain_ing-0.3) min(best_pars_mse.gain_ing+0.3, 2)];
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha_slope,gain_exc, gain_inh,params,bo_opts2, 'ssim'); % Optimizes FCD
-
-mkdir Figuras/N3_FC_Gain_exc/SSIM/ Finetune/
-movefile Figuras/*_plot.fig Figuras/N3_FC_Gain_exc/SSIM/Finetune
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_mse] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,gain_exc, gain_inh,params,bo_opts2, 'mse'); 
+best_pars_mse = bestPoint(bayesopt_out_mse, 'Criterion', 'min-mean')
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "best_pars_mse", "bayesopt_out_mse")
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+end
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
 close all;
-%%
-% CORR
+%
+% SSIM
 %
 
-opt_corr = load('data/checkpoints/N3_CORR_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat')
+sub_experiment_name = "SSIM";
+filename = experiment_name+"-"+sub_experiment_name;
+
+if ~exist(fullfile("Results",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Results",experiment_name, sub_experiment_name))
+end
+
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name))
+end
+checkpoint_folder = fullfile("data/checkpoints",experiment_name);
+checkoint_file = [fullfile(checkpoint_folder,filename+"_v1.mat")];
+
+opt_ssim = load('W_SSIM_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat');
+best_pars_ssim = bestPoint(opt_ssim.BayesoptResults,'Criterion','min-mean');
+% Optimizable parameters
+G = best_pars_ssim.G; 
+alpha = best_pars_ssim.alpha; 
+
+gain_exc = [-3 3]; % Here only optimizing gain
+gain_inh = 0;%[-2 2];
+
+
+bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
+        'MinWorkerUtilization',4,...
+        'AcquisitionFunctionName','expected-improvement-plus',...
+        'MaxObjectiveEvaluations',1e16,...
+        'ParallelMethod','clipped-model-prediction',...
+        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time_1,...
+        'OutputFcn',@saveToFile,...
+        'SaveFileName',checkoint_file,...
+        'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,gain_exc, gain_inh,params,bo_opts, 'ssim'); % Optimizes FCD
+opt_res = load([checkoint_file]);
+[best_pars_ssim,est_min_ks_ssim] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name))
+movefile("Results/FCtrace.mat", fullfile("Results", experiment_name, sub_experiment_name, "FCtrace_base.mat"))
+close all;
+% Finetuning
+iniX = opt_res.BayesoptResults.XTrace;
+iniObj = opt_res.BayesoptResults.ObjectiveTrace;
+checkoint_file2 = [fullfile(checkpoint_folder,filename+"_v2.mat")];
+bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
+    'IsObjectiveDeterministic',false,'UseParallel',true,...
+        'MinWorkerUtilization',4,...
+        'AcquisitionFunctionName','expected-improvement-plus',...
+        'MaxObjectiveEvaluations',1e16,...
+        'ParallelMethod','clipped-model-prediction',...
+        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time_2   ,...
+        'OutputFcn',@saveToFile,...
+        'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective},...
+        'SaveFileName',checkoint_file2};
+
+gain_exc = [max(-3,best_pars_ssim.gain_exc-0.5) min(best_pars_ssim.gain_exc+0.5, 3)];
+gain_inh = 0;%[max(-2,best_pars_ssim.gain_inh-0.5) min(best_pars_ssim.gain_inh+0.5, 2)];
+
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,gain_exc, gain_inh,params,bo_opts2, 'ssim'); % Optimizes FCD
+best_pars_ssim = bestPoint(bayesopt_out_ssim, 'Criterion', 'min-mean')
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "best_pars_ssim", "bayesopt_out_ssim")
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+end
+    movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+close all;
+%
+%% CORR
+%
+
+
+sub_experiment_name = "CORR";
+filename = experiment_name+"-"+sub_experiment_name;
+if ~exist(fullfile("Results",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Results",experiment_name, sub_experiment_name))
+end
+
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name))
+end
+opt_corr = load('data/checkpoints/W_CORR_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat')
+checkpoint_folder = fullfile("data/checkpoints",experiment_name);
+checkoint_file = [fullfile(checkpoint_folder,filename+"_v1.mat")];
 best_pars_corr = bestPoint(opt_corr.BayesoptResults,'Criterion','min-mean')
 % Optimizable parameters
 G = best_pars_corr.G; 
-alpha_slope = best_pars_corr.alpha; 
+alpha = best_pars_corr.alpha; 
 
-nm = [-4 4]; % Here only optimizing nm
-nm_bias = [-4 4];
+gain_exc = [-3 3]; % Here only optimizing gain
+gain_inh = 0;
 
-experiment_name = 'N3_CORR_Gain_exc';
-checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_v1.mat'];
 bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
         'AcquisitionFunctionName','expected-improvement-plus',...
@@ -197,16 +244,16 @@ bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
         'OutputFcn',@saveToFile,...
         'SaveFileName',checkoint_file,...
         'PlotFcn', {@plot_mse,@plot_corr,@plot_ssim,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_corr] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha_slope,nm, nm_bias,params,bo_opts, 'corr'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_corr] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,gain_exc, gain_inh,params,bo_opts, 'corr'); % Optimizes FCD
 opt_res = load([checkoint_file]);
 [best_pars_corr,est_min_ks_corr] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
-mkdir Figuras/N3_FC_Gain_exc/ CORR/
-movefile Figuras/*_plot.fig Figuras/N3_FC_Gain_exc/CORR/
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name))
+movefile("Results/FCtrace.mat", fullfile("Results", experiment_name, sub_experiment_name, "FCtrace_base.mat"))
 close all;
-% Finetuning
+%% Finetuning
 iniX = opt_res.BayesoptResults.XTrace;
 iniObj = opt_res.BayesoptResults.ObjectiveTrace;
-checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
+checkoint_file2 = [fullfile(checkpoint_folder,filename+"_v2.mat")];
 bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
     'IsObjectiveDeterministic',false,'UseParallel',true,...
         'MinWorkerUtilization',4,...
@@ -218,28 +265,40 @@ bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
         'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective},...
         'SaveFileName',checkoint_file2};
 
-nm = [max(-4,best_pars_corr.nm-0.5) min(best_pars_corr.nm+0.5, 4)];
-nm_bias = [max(-4,best_pars_corr.nm_bias-0.3) min(best_pars_corr.nm_bias+0.3, 4)];
+gain_exc = [max(-3,best_pars_corr.gain_exc-0.5) min(best_pars_corr.gain_exc+0.5, 3)];
+gain_inh = 0;%[max(-1,best_pars_corr.gain_inh-0.3) min(best_pars_corr.gain_inh+0.3, 1)];
 
-[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_corr] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,nm, nm_bias,params,bo_opts2, 'corr'); % Optimizes FCD
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_corr] = gain_fit_with_metrics(params.TMAX,ave_fc,[],G,alpha,gain_exc, gain_inh,params,bo_opts2, 'corr'); % Optimizes FCD
+best_pars_corr = bestPoint(bayesopt_out_corr, 'Criterion', 'min-mean')
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "best_pars_corr", "bayesopt_out_corr")
 
-mkdir Figuras/N3_FC_Gain_exc/CORR/ Finetune/
-movefile Figuras/*_plot.fig Figuras/N3_FC_Gain_exc/CORR/Finetune
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+end
+
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
 close all;
 
+
 % Simulations
-%%
+
+
 params = DefaultParams();
 params.receptors = av/max(av);
 params.receptors(find(params.receptors==0))=mean(params.receptors);
 stren = sum(params.C);
 thispars = params;
 
-thispars.G = 0.9721;
-thispars.alpha = 0.2422;
+%  MSE SIM
+sub_experiment_name = "MSE";
+opt_mse = load('W_MSE_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat');
+best_pars_mse_galpha = bestPoint(opt_mse.BayesoptResults,'Criterion','min-mean');
+thispars.G = best_pars_mse_galpha.G;
+thispars.alpha = best_pars_mse_galpha.alpha;
+
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
-fic_nm = thispars.receptors.*best_pars_mse.nm + best_pars_mse.nm_bias; % Could add bias
-thispars.J = thispars.J + (thispars.J).*fic_nm; % modulates Gain_exc
+thispars.gaine = best_pars_mse.gain_exc;
 
 % Run simulation for a given nb of steps (milliseconds)
 nb_steps = 500000;
@@ -253,17 +312,22 @@ for nsub=1:15
     simulations(:, :, nsub) = BOLDNM(:, 1:198);
     simulationsFC(:, :, nsub) = corrcoef(squeeze(simulations(:, :, nsub))');
 end
-save("Results/N3_MSE_Gain_exc.mat", "simulationsFC", "best_pars_mse", "bayesopt_out_mse")
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "simulationsFC", "-append")
 h = figure();
 imagesc(squeeze(mean(simulationsFC ,3)));
-savefig(h, "Figuras/N3_FC_Gain_exc/MSE/MSE_sim.fig")
-%%
-thispars.G = 1.822;
-thispars.alpha = 0.692;
+savefig(h, fullfile("Figuras",experiment_name, sub_experiment_name, sub_experiment_name+"_SIM.fig"))
+
+% SSIM SIM
+sub_experiment_name = "SSIM";
+opt_ssim = load('W_SSIM_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat');
+best_pars_ssim_galpha = bestPoint(opt_ssim.BayesoptResults,'Criterion','min-mean');
+thispars.G = best_pars_ssim_galpha.G;
+thispars.alpha = best_pars_ssim_galpha.alpha;
 thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
-optssim = load('data/checkpoints/N3_SSIM_Gain_excfinetune_checkpoint_dmf_bayesopt_N90_v2.mat');
-best_pars_ssim = bestPoint(optssim.BayesoptResults, 'Criterion', 'min-mean');
-thispars.wgaine = best_pars_ssim.gain_exc;
+thispars.gaine = best_pars_ssim.gain_exc;
+%thispars.wgaine = best_pars_ssim.gain_exc;
+%thispars.wgaini = 0.2838;
 % Run simulation for a given nb of steps (milliseconds)
 nb_steps = 500000;
 for nsub=1:15
@@ -276,15 +340,25 @@ for nsub=1:15
     simulations(:, :, nsub) = BOLDNM(:, 1:198);
     simulationsFC(:, :, nsub) = corrcoef(squeeze(simulations(:, :, nsub))');
 end
-save("Results/N3_SSIM_Gain_exc.mat", "simulationsFC", "best_pars_ssim", "bayesopt_out_ssim")
+
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "simulationsFC")
 h = figure();
 imagesc(squeeze(mean(simulationsFC ,3)));
-savefig(h, "Figuras/N3_FC_Gain_exc/SSIM/SSIM_sim.fig")
-%%
-thispars.G = best_pars_corr.G;
-thispars.alpha = best_pars_corr.alpha;
-thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
+savefig(h, fullfile("Figuras",experiment_name, sub_experiment_name, sub_experiment_name+"_SIM.fig"))
+disp(1-ssim(ave_fc, mean(simulationsFC ,3)))
 
+%% CORR SIM
+
+
+
+sub_experiment_name = "CORR";
+opt_corr = load('W_CORR_Galphafinetune_checkpoint_dmf_bayesopt_N90_v2.mat');
+best_pars_corr_galpha = bestPoint(opt_corr.BayesoptResults,'Criterion','min-mean');
+thispars.G = best_pars_corr_galpha.G;
+thispars.alpha = best_pars_corr_galpha.alpha;
+thispars.J = thispars.alpha*thispars.G*stren' + 1; % updates it
+thispars.gaine = best_pars_corr.gain_exc;
 % Run simulation for a given nb of steps (milliseconds)
 nb_steps = 500000;
   
@@ -298,7 +372,9 @@ for nsub=1:15
     simulations(:, :, nsub) = BOLDNM(:, 1:198);
     simulationsFC(:, :, nsub) = corrcoef(squeeze(simulations(:, :, nsub))');
 end
-save("Results/N3_CORR_Gain_exc.mat", "simulationsFC", "best_pars_corr", "bayesopt_out_corr")
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "simulationsFC", "-append")
 h = figure();
 imagesc(squeeze(mean(simulationsFC ,3)));
-savefig(h, "Figuras/N3_FC_Gain_exc/CORR/CORR_sim.fig")
+savefig(h, fullfile("Figuras",experiment_name, sub_experiment_name, sub_experiment_name+"_SIM.fig"))
+disp(1-ssim(ave_fc, mean(simulationsFC ,3)))
