@@ -1,4 +1,4 @@
-function [opt_fc_error,opt_fcd_ks,opt_pars,results  ] = fit_with_metrics(T,emp_fc,emp_fcd,G,slope, gain_exc, gain_inh,dmf_pars,opts, metric)
+function [opt_fc_error,opt_fcd_ks,opt_pars,results  ] = gain_fit_with_metrics(T,emp_fc,emp_fcd,G,slope, scale, bias,dmf_pars,opts, metric)
 %
 % Function to find optimal DMF parameters to fit either the FC or the FCD
 % of bold signals.
@@ -31,14 +31,14 @@ if length(slope(:))==2 % if 2x1, optimized within bounds, otherwise dont optimiz
     opt_vars = [opt_vars alphavals];
 end
 
-if length(gain_exc(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
-    gain_excvals = optimizableVariable('gain_exc',[gain_exc(1) gain_exc(2)]);
-    opt_vars = [opt_vars gain_excvals];
+if length(scale(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
+    scalevals = optimizableVariable('scale',[scale(1) scale(2)]);
+    opt_vars = [opt_vars scalevals];
 end
 
-if length(gain_inh(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
-    gain_inhvals = optimizableVariable('gain_inh',[gain_inh(1) gain_inh(2)]);
-    opt_vars = [opt_vars gain_inhvals];
+if length(bias(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
+    biasvals = optimizableVariable('bias',[bias(1) bias(2)]);
+    opt_vars = [opt_vars biasvals];
 end
 
 % BAYES OPTIMIZATION
@@ -59,6 +59,7 @@ end
         const = [];
         % Unpacking parameters
         thispars = dmf_pars;
+        disp(thispars.G)
         thispars.J = 0.75*thispars.G*stren' + 1;
         if ismember('G',g_alpha.Properties.VariableNames)
             thispars.G = g_alpha.G;
@@ -67,15 +68,15 @@ end
         if ismember('alpha',g_alpha.Properties.VariableNames)
             thispars.J = g_alpha.alpha*thispars.G*stren' + 1; % updates it
         end
-        if ismember('gain_exc',g_alpha.Properties.VariableNames)
-            thispars.wgaine = g_alpha.gain_exc;             
+        if ismember('scale',g_alpha.Properties.VariableNames)
+            thispars.scale = g_alpha.scale;             
         end
-        if ismember('gain_inh',g_alpha.Properties.VariableNames)
-            thispars.wgaini = g_alpha.gain_inh; 
+        if ismember('bias',g_alpha.Properties.VariableNames)
+            thispars.bias = g_alpha.bias; 
         end
         
         % Simulating
-        [rates,bold] = DMF(thispars, nsteps,'both'); % runs simulation
+        [rates,bold] = DMF_hetero(thispars, nsteps,'both'); % runs simulation
         bold = bold(:,dmf_pars.burnout:end); % remove initial transient
         bold(isnan(bold))=0;
         bold(isinf(bold(:)))=max(bold(~isinf(bold(:))));
@@ -124,7 +125,7 @@ end
         
         % Simulating
 %         bold = dyn_fic_DMF(thispars, nsteps,'bold'); % runs simulation
-        [rates,bold] = DMF(thispars, nsteps,'both'); % runs simulation  with rates
+        [rates,bold] = DMF_hetero(thispars, nsteps,'both'); % runs simulation  with rates
         bold = bold(:,dmf_pars.burnout:end); % remove initial transient
         bold(isnan(bold))=0;
         bold(isinf(bold(:)))=max(bold(~isinf(bold(:))));

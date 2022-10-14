@@ -1,0 +1,258 @@
+clear all;
+close all;
+basefold = './data/';
+data_file = 'hcpunrelated100_REST_dkt68';
+sc_file = 'SC_dtk68horn';
+hetero_file = 'myelin_HCP_dk68';
+load([basefold,data_file,'.mat'])
+load([basefold,sc_file,'.mat'])
+load([basefold,hetero_file,'.mat'])
+
+% Dataset values
+TR = 0.72; %This is for GusDeco at dkt68
+NSUBJECTS = 100;
+NREGIONS = 68;
+MAXTIME = 464;
+SC = Cnew;
+RECEPTORS = t1t2Cortex;
+RECEPTORS = RECEPTORS/max(RECEPTORS)-min(RECEPTORS);
+RECEPTORS = RECEPTORS - max(RECEPTORS) + 1;
+
+% Save in data the timeseries
+indexsub=1:NSUBJECTS;
+for nsub=indexsub
+    data(:, :, nsub)=subject{nsub}.dkt68ts(:, :);
+end
+
+
+%% 
+
+C = SC/max(max(SC))*0.2;
+[ params ] = DefaultParams('C',C); % creates default parameters for the simulation
+params.burnout = 10; % seconds to remove after initial transient of simulation
+params.flp = 0.04; % low cut-off of the bandpass filter 0.01 for aal wake
+params.fhi = 0.07; % high cut-off of the bandpass filter 0.1
+params.wsize = 30; % size of the FCD windows
+params.overlap = 28; % overlap of the FCD windows
+% IT IS TR=2 FOR ENZOS SLEEP DATA
+params.TR = TR; % repetition time of the fMRI signal (will be used to simulate fMRI)
+params.batch_size = 50000; % batch for
+% circular buffer of simulation
+% params.seed = 10; % initial condition for the simulation. 
+% Heterogenity
+params.receptors = RECEPTORS;
+% Setting data constants
+params.N=NREGIONS;
+params.NSUB=NSUBJECTS;
+params.TMAX=MAXTIME;
+Isubdiag = find(tril(ones(params.N),-1));
+
+indexsub=1:params.NSUB;
+for nsub=indexsub
+    nsub;    
+    Wdata(:,:,nsub)=data(:, 1:params.TMAX, nsub) ; 
+    WdataF(:,:,nsub) = permute(filter_bold(Wdata(:, :,nsub)', params.flp, params.fhi, params.TR), [2 1 3]);
+    WFCdata(nsub,:,:)=corrcoef(squeeze(Wdata(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+    WFCdataF(nsub,:,:)=corrcoef(squeeze(WdataF(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+
+end
+
+WFCdata = permute(WFCdata, [2,3,1]);
+WFCdataF = permute(WFCdataF, [2,3,1]);
+ave_fc = mean(WFCdataF,3);
+
+% Optimizable parameters
+% Setting DMF parameters
+N = size(params.C,1);
+stren = sum(params.C);
+isubfc = find(tril(ones(N),-1));
+nsteps = params.TMAX.*(1000); % number of DMF timepoints
+gamma_ent_fun = @(a) a(1) + log(a(2)) + log(gamma(a(1))) + (1-a(1))*psi(a(1));
+params.G = 2.1;
+params.J = 0.75*params.G*stren' + 1;
+metric = 'ssim';
+wgain = [0 2]; % Here only optimizing gain
+bgain = [-0.6 0];
+% Number of points in grid = n_weigth*n_bias
+n_weigth = 40;
+n_bias = 12;
+
+
+checkpoint_folder = 'checkpoints/';
+experiment_name = 'HCP68';
+if ~exist(fullfile("Figuras",experiment_name))
+    mkdir(fullfile("Figuras",experiment_name))
+end
+if ~exist(fullfile("Results",experiment_name))
+    mkdir(fullfile("Results",experiment_name))
+end
+   
+if ~exist(fullfile("data/checkpoints",experiment_name))
+    mkdir(fullfile("data/checkpoints",experiment_name))
+end
+
+sub_experiment_name = "Myelin_FullGrid";
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name))
+end
+if ~exist(fullfile("Results",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Results",experiment_name, sub_experiment_name))
+end
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+end
+
+opt_time_1 = 1800; % 30 min
+opt_time_2 = 900; % 15 min
+%opt_time_1 = 420; % 2 min
+%opt_time_2 = 60; % 1 min
+
+
+
+opt_vars = [];
+if length(wgain(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
+    wgainvals = optimizableVariable('wgain',[wgain(1) wgain(2)]);
+    opt_vars = [wgainvals];
+end
+
+if length(bgain(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
+    bgainvals = optimizableVariable('bgain',[bgain(1) bgain(2)]);
+    opt_vars = [opt_vars bgainvals];
+end
+
+
+weight_space = linspace(wgain(1), wgain(2), n_weigth);
+bias_space = linspace(bgain(1), bgain(2), n_bias);
+weight_range = 1:length(weight_space);
+bias_range = 1:length(bias_space);
+local_fc_error = ones(length(weight_space), length(bias_space));
+local_fc_error_mse = ones(length(weight_space), length(bias_space));
+local_fc_error_corr = ones(length(weight_space), length(bias_space));
+local_fc = zeros(length(weight_space), length(bias_space), N, N);
+
+%%
+
+parfor cur_weight=weight_range
+    thispars=params;       
+    cur_weight
+    for cur_bias=bias_range        
+        
+        thispars.wgain = weight_space(cur_weight);                                           
+        thispars.bgain = bias_space(cur_bias);                 
+        % Simulating        
+        [rates,bold] = DMF_hetero(thispars, nsteps,'both'); % runs simulation
+        bold = bold(:,params.burnout:end); % remove initial transient
+        bold(isnan(bold))=0;
+        bold(isinf(bold(:)))=max(bold(~isinf(bold(:))));
+        if isempty(bold)            
+            local_fc_error(cur_weight, cur_bias) = nan;                    
+            local_fc_error_mse(cur_weight, cur_bias) = nan;   
+            local_fc_error_corr(cur_weight, cur_bias) = nan;   
+        end
+        % Filtering and computing FC
+        filt_bold = filter_bold(bold',params.flp,params.fhi,params.TR);
+        sim_fc = corrcoef(filt_bold);
+        
+        % Computing rates
+        rates = rates(:,(params.burnout*1000):end);
+        reg_fr = mean(rates,2);
+        reg_ent = zeros(N,1);
+        for n=1:N
+            gamma_pars = gamfit(rates(n,:));
+            reg_ent(n) = gamma_ent_fun(gamma_pars);
+        end
+    
+        % Computing FC error: Mean Squared differences between vectorized FCs              
+        mse_error= mean((sim_fc(isubfc)-ave_fc(isubfc)).^2); % MSE FC
+        ssim_error = 1-ssim(ave_fc,sim_fc);
+        corr_error = 1-corr2(ave_fc, sim_fc);        
+        
+        %parsave(cur_weight,cur_bias, sim_fc, metrics(metric))
+    
+        local_fc_error(cur_weight, cur_bias)=ssim_error;        
+        local_fc_error_corr(cur_weight, cur_bias)=corr_error;
+        local_fc_error_mse(cur_weight, cur_bias)=mse_error;
+        local_fc(cur_weight, cur_bias, :, :) = sim_fc;
+    
+        
+    end
+end
+disp("Finished 1st run ok")
+[fc_error_bias, weight] = min(local_fc_error);
+[fc_error, bias] = min(fc_error_bias);
+weight_out = weight_space(weight(bias));                                           
+bias_out = bias_space(bias); 
+outdata = {squeeze(local_fc(weight(bias), bias, :, :)), weight_out, bias_out};
+save_name = fullfile("Results", experiment_name,sub_experiment_name,  "Results.mat");
+save(save_name,"fc_error", "outdata", "local_fc_error", "local_fc_error_mse", "local_fc_error_corr");
+h = figure(); 
+imagesc(local_fc_error); 
+xticks(bias_range);
+yticks(weight_range); 
+xticklabels(round(bias_space,2)); 
+yticklabels(round(weight_space,2))
+save
+%(T,ave_fc,G,alpha, wgain, bgain,n_weigth, n_bias,params,opts, metric)
+%[fc_error ,outdata] = gain_gridsearch_with_metrics(params.TMAX,ave_fc,G,alpha,wgain, bgain, n_weigth, n_bias,params,bo_opts, 'ssim'); % Optimizes FCD
+%opt_res = load([checkoint_file]);
+%[best_pars_ssim,est_min_ks_ssim] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
+
+%% Simulations
+%
+%[ params ] = DefaultParams('C',C);
+%params.receptors = av/max(av);
+stren = sum(params.C);
+C = SC/max(max(SC))*0.2;
+[ params ] = DefaultParams('C',C); % creates default parameters for the simulation
+params.burnout = 10; % seconds to remove after initial transient of simulation
+params.flp = 0.04; % low cut-off of the bandpass filter 0.01 for aal wake
+params.fhi = 0.07; % high cut-off of the bandpass filter 0.1
+params.wsize = 30; % size of the FCD windows
+params.overlap = 28; % overlap of the FCD windows
+% IT IS TR=2 FOR ENZOS SLEEP DATA
+params.TR = TR; % repetition time of the fMRI signal (will be used to simulate fMRI)
+params.batch_size = 50000; % batch for
+% circular buffer of simulation
+% params.seed = 10; % initial condition for the simulation. 
+% Heterogenity
+params.receptors = RECEPTORS;
+% Setting data constants
+params.N=NREGIONS;
+params.NSUB=NSUBJECTS;
+params.TMAX=MAXTIME;
+%params.START_TIME=101;
+
+thispars = params;
+
+%% SSIM
+%sub_experiment_name = 'Hetero_nogain_SSIM';
+thispars.G = 2.1;
+%thispars.alpha = best_pars_ssim.alpha;
+thispars.J = 0.75*thispars.G*stren' + 1; % updates it
+thispars.wgain = 1.3744;
+thispars.bgain = -0.122;
+% Run simulation for a given nb of steps (milliseconds)
+nb_steps = 1500000;
+parfor nsub=1:params.NSUB
+    nsub
+    BOLDNM = DMF_hetero(thispars, nb_steps);
+    BOLDNM = filter_bold(BOLDNM', params.flp, params.fhi, ...
+        params.TR);
+    BOLDNM = BOLDNM';   
+    trans = 5;
+    BOLDNM5 = BOLDNM(:, 1+trans:end-trans);
+    simulations5(:, :, nsub) = BOLDNM5(:, params.START_TIME:params.START_TIME+params.TMAX);
+    simulationsFC5(:, :, nsub) = corrcoef(squeeze(simulations5(:, :, nsub))');
+    trans = 20;
+    BOLDNM20 = BOLDNM(:, 1+trans:end-trans);
+    simulations20(:, :, nsub) = BOLDNM20(:, params.START_TIME:params.START_TIME+params.TMAX);
+    simulationsFC20(:, :, nsub) = corrcoef(squeeze(simulations20(:, :, nsub))');
+end
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "simulationsFC5","simulationsFC20", "thispars")
+h = figure();
+sim_fc = mean(simulationsFC5 ,3);
+disp(1-ssim(ave_fc, sim_fc))
+imagesc(squeeze(mean(simulationsFC5 ,3)));
+savefig(h, fullfile("Figuras",experiment_name, sub_experiment_name, "sim.fig"))
+

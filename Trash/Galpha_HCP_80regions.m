@@ -1,0 +1,186 @@
+clear all;
+close all;
+basefold = './data/';
+data_file = 'hcp1003_REST1_LR_dbs80'; % 
+load('data/heterogeneitys/myelin_aal.mat') % Heterogenity
+load('data/heterogeneitys/SC_dbs80HARDIFULL.mat') % Heterogenity
+load([basefold,data_file,'.mat'])
+
+SC = SC_dbs80HARDI;
+
+%% 
+
+C = SC/max(max(SC))*0.2;
+[ params ] = DefaultParams('C',C); % creates default parameters for the simulation
+params.burnout = 10; % seconds to remove after initial transient of simulation
+params.flp = 0.04; % low cut-off of the bandpass filter 0.01 for aal wake
+params.fhi = 0.07; % high cut-off of the bandpass filter 0.1
+params.wsize = 30; % size of the FCD windows
+params.overlap = 28; % overlap of the FCD windows
+% IT IS TR=2 FOR ENZOS SLEEP DATA
+params.TR = 2; % repetition time of the fMRI signal (will be used to simulate fMRI)
+params.batch_size = 50000; % batch for
+% circular buffer of simulation
+% params.seed = 10; % initial condition for the simulation. 
+% Heterogenity
+params.receptors = av/max(av);
+% Setting data constants
+params.N=80;
+params.NSUB=398;
+params.TMAX=464;
+params.START_TIME=101;
+Isubdiag = find(tril(ones(params.N),-1));
+
+indexsub=1:params.NSUB;
+for nsub=indexsub
+    nsub;    
+    Wdata(:,:,nsub)=subject{nsub}.dbs80ts(:, params.START_TIME:params.START_TIME+params.TMAX) ; % TS_W tiene registros de distinta longitud
+    WdataF(:,:,nsub) = permute(filter_bold(Wdata(:, :,nsub)', params.flp, params.fhi, params.TR), [2 1 3]);
+    WFCdata(nsub,:,:)=corrcoef(squeeze(Wdata(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+    WFCdataF(nsub,:,:)=corrcoef(squeeze(WdataF(:,:,nsub))'); % toma las correlaciones de todos los nodos entre sí para cada sujeto
+
+end
+
+WFCdata = permute(WFCdata, [2,3,1]);
+WFCdataF = permute(WFCdataF, [2,3,1]);
+ave_fc = mean(WFCdataF,3);
+
+% Optimizable parameters
+prev_res = load('Results/G_HCP/SSIM/SSIM.mat');
+G = prev_res.best_pars_ssim.G; 
+alpha_slope = params.alpha; % fix alpha-> determines the local inhibitiory feedback. Can be optimized as well.
+params.receptors = 0;
+nm_scale = 0; % Here only optimizing nm
+nm_bias = 0;
+%wgain = []
+T = params.TMAX; % seconds to simulate, should be comparable to the empirical recording time (~7-10 minutes of resting state)
+% Optimizing heterogenity parameters
+
+
+checkpoint_folder = 'checkpoints/';
+experiment_name = 'G_HCP';
+if ~exist(fullfile("Figuras",experiment_name))
+    mkdir(fullfile("Figuras",experiment_name))
+end
+if ~exist(fullfile("Results",experiment_name))
+    mkdir(fullfile("Results",experiment_name))
+end
+   
+if ~exist(fullfile("data/checkpoints",experiment_name))
+    mkdir(fullfile("data/checkpoints",experiment_name))
+end
+opt_time_1 = 1800; % 30 min
+opt_time_2 = 900; % 15 min
+%opt_time_1 = 420; % 2 min
+%opt_time_2 = 60; % 1 min
+
+%
+%% SSIM
+%
+sub_experiment_name = "SSIM";
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name))
+end
+if ~exist(fullfile("Results",experiment_name, sub_experiment_name))
+    mkdir(fullfile("Results",experiment_name, sub_experiment_name))
+end
+if ~exist(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+    mkdir(fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+end
+checkoint_file = [strcat(basefold, checkpoint_folder),experiment_name,'_v1.mat'];
+bo_opts = {'IsObjectiveDeterministic',false,'UseParallel',true,...
+        'MinWorkerUtilization',4,...
+        'AcquisitionFunctionName','expected-improvement-plus',...
+        'MaxObjectiveEvaluations',1e16,...
+        'ParallelMethod','clipped-model-prediction',...
+        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time_1,...
+        'OutputFcn',@saveToFile,...
+        'SaveFileName',checkoint_file,...
+        'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective}};
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = fit_with_metrics(T,ave_fc,[],G,alpha_slope,nm_scale, nm_bias,params,bo_opts, 'ssim'); % Optimizes FCD
+opt_res = load([checkoint_file]);
+[best_pars_ssim,est_min_ks_ssim] = bestPoint(opt_res.BayesoptResults,'Criterion','min-mean')
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name))
+close all;
+% Finetuning
+iniX = opt_res.BayesoptResults.XTrace;
+iniObj = opt_res.BayesoptResults.ObjectiveTrace;
+checkoint_file2 = [strcat(basefold, checkpoint_folder),strcat(experiment_name, 'finetune'),'_checkpoint_dmf_bayesopt_N',num2str(90),'_v2.mat'];
+bo_opts2 = {'InitialX',iniX,'InitialObjective',iniObj,...
+    'IsObjectiveDeterministic',false,'UseParallel',true,...
+        'MinWorkerUtilization',4,...
+        'AcquisitionFunctionName','expected-improvement-plus',...
+        'MaxObjectiveEvaluations',1e16,...
+        'ParallelMethod','clipped-model-prediction',...
+        'GPActiveSetSize',300,'ExplorationRatio',0.5,'MaxTime',opt_time_2   ,...
+        'OutputFcn',@saveToFile,...
+        'PlotFcn', {@plot_mse,@plot_ssim,@plot_corr,@plot_fc, @plotObjectiveModel,@plotMinObjective},...
+        'SaveFileName',checkoint_file2};
+
+G_finetune = [max(0.01,best_pars_ssim.G-0.5) min(best_pars_ssim.G+0.5, 2.9)];
+alpha_finetune = params.alpha;%[max(0.01,best_pars_ssim.alpha-0.15) min(best_pars_ssim.alpha+0.15, 1)];
+
+[opt_fc_error,opt_fcd_ks,opt_pars,bayesopt_out_ssim] = fit_with_metrics(T,ave_fc,[],G_finetune,alpha_finetune,nm_scale, nm_bias,params,bo_opts2, 'ssim'); % Optimizes FCD
+best_pars_ssim = bestPoint(bayesopt_out_ssim, 'Criterion', 'min-mean')
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "best_pars_ssim", "bayesopt_out_ssim")
+movefile("Figuras/*plot.fig",fullfile("Figuras",experiment_name, sub_experiment_name, "Finetune"))
+close all;
+%
+
+%% Simulations
+%
+%[ params ] = DefaultParams('C',C);
+%params.receptors = av/max(av);
+stren = sum(params.C);
+C = SC/max(max(SC))*0.2;
+[ params ] = DefaultParams('C',C); % creates default parameters for the simulation
+params.burnout = 10; % seconds to remove after initial transient of simulation
+params.flp = 0.04; % low cut-off of the bandpass filter 0.01 for aal wake
+params.fhi = 0.07; % high cut-off of the bandpass filter 0.1
+params.wsize = 30; % size of the FCD windows
+params.overlap = 28; % overlap of the FCD windows
+% IT IS TR=2 FOR ENZOS SLEEP DATA
+params.TR = 2; % repetition time of the fMRI signal (will be used to simulate fMRI)
+params.batch_size = 50000; % batch for
+% circular buffer of simulation
+% params.seed = 10; % initial condition for the simulation. 
+% Heterogenity
+params.receptors = av/max(av);
+% Setting data constants
+params.N=80;
+params.NSUB=398;
+params.TMAX=464;
+params.START_TIME=101;
+
+thispars = params;
+
+%% SSIM
+thispars.G = prev_res.best_pars_ssim.G;
+%thispars.alpha = best_pars_ssim.alpha;
+thispars.J = 0.75*thispars.G*stren' + 1; % updates it
+
+% Run simulation for a given nb of steps (milliseconds)
+nb_steps = 1500000;
+parfor nsub=1:params.NSUB
+    nsub
+    BOLDNM = DMF(thispars, nb_steps);
+    BOLDNM = filter_bold(BOLDNM', params.flp, params.fhi, params.TR);
+    BOLDNM = BOLDNM';   
+    trans = 5;
+    BOLDNM5 = BOLDNM(:, 1+trans:end-trans);
+    simulations5(:, :, nsub) = BOLDNM5(:, params.START_TIME:params.START_TIME+params.TMAX);
+    simulationsFC5(:, :, nsub) = corrcoef(squeeze(simulations5(:, :, nsub))');
+    trans = 20;
+    BOLDNM20 = BOLDNM(:, 1+trans:end-trans);
+    simulations20(:, :, nsub) = BOLDNM20(:, params.START_TIME:params.START_TIME+params.TMAX);
+    simulationsFC20(:, :, nsub) = corrcoef(squeeze(simulations20(:, :, nsub))');
+end
+save_name = fullfile("Results", experiment_name, sub_experiment_name, sub_experiment_name+".mat");
+save(save_name, "simulationsFC5","simulationsFC20", '-append')
+h = figure();
+sim_fc = mean(simulationsFC5 ,3);
+disp(1-ssim(ave_fc, sim_fc))
+imagesc(squeeze(mean(simulationsFC5 ,3)));
+savefig(h, fullfile("Figuras",experiment_name, sub_experiment_name, "sim.fig"))
+

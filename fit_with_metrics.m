@@ -1,4 +1,4 @@
-function [opt_fc_error,opt_fcd_ks,opt_pars,results  ] = fit_with_metrics(T,emp_fc,emp_fcd,G,slope, nm, nm_bias,dmf_pars,opts, metric)
+function [opt_fc_error,opt_fcd_ks,opt_pars,results  ] = fit_with_metrics(T,emp_fc,emp_fcd,G,alpha, nm, nm_bias,dmf_pars,opts, metric)
 %
 % Function to find optimal DMF parameters to fit either the FC or the FCD
 % of bold signals.
@@ -7,7 +7,7 @@ function [opt_fc_error,opt_fcd_ks,opt_pars,results  ] = fit_with_metrics(T,emp_f
 % emp_fc = N x N empirical FC
 % emp_fcd = N x N empirical FCD. If empty, only works with FC.
 % G = 2 x 1 with upper and lower bounds on G or empty
-% slope = 2 x 1 with upper and lower bounds on FIC slope or empty
+% alpha = 2 x 1 with upper and lower bounds on FIC alpha or empty
 % dmf_pars = structure generarted by dyn_fic_DefaultParams with DMF
 % parameters
 % opts = options for the fit and optimization.
@@ -18,16 +18,14 @@ stren = sum(dmf_pars.C);
 isubfc = find(tril(ones(N),-1));
 nsteps = T.*(1000); % number of DMF timepoints
 gamma_ent_fun = @(a) a(1) + log(a(2)) + log(gamma(a(1))) + (1-a(1))*psi(a(1));
-
-
 opt_vars = [];
 if length(G(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize, use fix value provided in dmf_pars
     gvals = optimizableVariable('G',[G(1) G(2)]);
     opt_vars = [gvals];
 end
 
-if length(slope(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
-    alphavals = optimizableVariable('alpha',[slope(1) slope(2)]);
+if length(alpha(:))==2 % if 2x1, optimized within bounds, otherwise dont optimize
+    alphavals = optimizableVariable('alpha',[alpha(1) alpha(2)]);
     opt_vars = [opt_vars alphavals];
 end
 
@@ -53,9 +51,6 @@ else % OPTIMIZES FCD and returns FC GOF
     opt_pars =results.XAtMinEstimatedObjective;
     [~,min_id] = min(results.EstimatedObjectiveMinimumTrace);
     opt_fc_error = results.UserDataTrace{min_id};
-
-
-
 
 end
 
@@ -123,7 +118,7 @@ end
         thispars = dmf_pars;        
         if ismember('G',g_alpha.Properties.VariableNames)
             thispars.G = g_alpha.G;
-            thispars.J = 0.75*thispars.G*stren' + 1; % uses default slope value
+            thispars.J = 0.75*thispars.G*stren' + 1; % uses default alpha value
         end
         if ismember('alpha',g_alpha.Properties.VariableNames)
             thispars.J = g_alpha.alpha*thispars.G*stren' + 1; % updates it
